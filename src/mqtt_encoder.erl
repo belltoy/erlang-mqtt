@@ -27,7 +27,7 @@ encode(#mqtt_connect{
           0:1 % reserved
         >>,
         <<KeepAlive:16>>,
-        encode_properties(Props, connect, Opts),
+        encode_properties(Props, Opts),
         %% Paylaod
         encode_utf8_string(ClientId),
         encode_last_will(LastWill, Opts),
@@ -44,7 +44,7 @@ encode(#mqtt_connack{session_present = SessionPresent,
         %% Variable header
         <<0:7, (encode_bool(SessionPresent)):1>>,
         <<ReasonCode:8>>,
-        encode_properties(Props, connack, Opts)
+        encode_properties(Props, Opts)
     ],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
     [<<?CONNACK:4, 0:4>>, RemainingLen, Remaining];
@@ -67,7 +67,7 @@ encode(#mqtt_publish{
                 ok = check_packet_id(PacketId),
                 <<PacketId:16>>
         end,
-        encode_properties(Props, publish, Opts),
+        encode_properties(Props, Opts),
         %% Payload
         Message
     ],
@@ -76,25 +76,25 @@ encode(#mqtt_publish{
 
 encode(#mqtt_puback{packet_id = PacketId, properties = Props}, Opts) ->
     ok = check_packet_id(PacketId),
-    Remaining = [<<PacketId:16>>, encode_properties(Props, puback, Opts)],
+    Remaining = [<<PacketId:16>>, encode_properties(Props, Opts)],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
     [<<?PUBACK:4, 0:4>>, RemainingLen, Remaining];
 
 encode(#mqtt_pubrec{packet_id = PacketId, properties = Props}, Opts) ->
     ok = check_packet_id(PacketId),
-    Remaining = [<<PacketId:16>>, encode_properties(Props, pubrec, Opts)],
+    Remaining = [<<PacketId:16>>, encode_properties(Props, Opts)],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
     [<<?PUBREC:4, 0:4>>, RemainingLen, Remaining];
 
 encode(#mqtt_pubrel{packet_id = PacketId, properties = Props}, Opts) ->
     ok = check_packet_id(PacketId),
-    Remaining = [<<PacketId:16>>, encode_properties(Props, pubrel, Opts)],
+    Remaining = [<<PacketId:16>>, encode_properties(Props, Opts)],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
     [<<?PUBREL:4, 2:4>>, RemainingLen, Remaining];
 
 encode(#mqtt_pubcomp{packet_id = PacketId, properties = Props}, Opts) ->
     ok = check_packet_id(PacketId),
-    Remaining = [<<PacketId:16>>, encode_properties(Props, pubcomp, Opts)],
+    Remaining = [<<PacketId:16>>, encode_properties(Props, Opts)],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
     [<<?PUBCOMP:4, 0:4>>, RemainingLen, Remaining];
 
@@ -102,7 +102,7 @@ encode(#mqtt_subscribe{packet_id = PacketId, topic_filters = TopicFilters, prope
     ok = check_packet_id(PacketId),
     Remaining = [
         <<PacketId:16>>,
-        encode_properties(Props, subscribe, Opts),
+        encode_properties(Props, Opts),
         encode_topic_filters(TopicFilters, Opts)
     ],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
@@ -112,7 +112,7 @@ encode(#mqtt_suback{packet_id = PacketId, reason_codes = ReturnCodes, properties
     ok = check_packet_id(PacketId),
     Remaining = [
         <<PacketId:16>>,
-        encode_properties(Props, suback, Opts),
+        encode_properties(Props, Opts),
         encode_reason_codes(ReturnCodes, Opts)
     ],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
@@ -122,7 +122,7 @@ encode(#mqtt_unsubscribe{packet_id = PacketId, topic_filters = TopicFilters, pro
     ok = check_packet_id(PacketId),
     Remaining = [
         <<PacketId:16>>,
-        encode_properties(Props, unsubscribe, Opts),
+        encode_properties(Props, Opts),
         encode_topic_filters(TopicFilters, Opts)
     ],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
@@ -135,7 +135,7 @@ encode(#mqtt_unsuback{packet_id = PacketId, reason_codes = ReasonCodes, properti
         <<PacketId:16>>,
         case ProtoVersion of
             ?PROTOCOL_V5 ->
-                [encode_properties(Props, unsuback, Opts), encode_reason_codes(ReasonCodes, Opts)];
+                [encode_properties(Props, Opts), encode_reason_codes(ReasonCodes, Opts)];
             _ -> []
         end
     ],
@@ -152,7 +152,7 @@ encode(#mqtt_disconnect{reason_code = ReasonCode, properties = Props},
     Remaining = [
         case ProtoVersion of
             ?PROTOCOL_V5 ->
-                [<<ReasonCode:8>>, encode_properties(Props, disconnect, Opts)];
+                [<<ReasonCode:8>>, encode_properties(Props, Opts)];
             _ -> []
         end
     ],
@@ -161,7 +161,7 @@ encode(#mqtt_disconnect{reason_code = ReasonCode, properties = Props},
 
 encode(#mqtt_auth{reason_code = ReasonCode, properties = Props},
        #{protocol_version := ?PROTOCOL_V5} = Opts) ->
-    Remaining = [<<ReasonCode:8>>, encode_properties(Props, auth, Opts)],
+    Remaining = [<<ReasonCode:8>>, encode_properties(Props, Opts)],
     RemainingLen = encode_variable_byte_integer(iolist_size(Remaining)),
     [<<?AUTH:4, 0:4>>, RemainingLen, Remaining].
 
@@ -222,7 +222,7 @@ encode_last_will(undefined, _Opts) ->
     <<>>;
 encode_last_will(#mqtt_last_will{topic = Topic, message = Message, properties = Props}, Opts) ->
     [
-        encode_properties(Props, will_properties, Opts),
+        encode_properties(Props, Opts),
         encode_utf8_string(Topic),
         encode_binary(Message)
     ].
@@ -269,125 +269,87 @@ check_packet_id(_PacketId) -> ok.
 %% Private functions for encoding properties
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-encode_properties(Props, PacketType, #{protocol_version := ?PROTOCOL_V5} = Opts) ->
-    encode_properties_v5(Props, PacketType, Opts);
-encode_properties(_Properties, _PacketType, _Opts) ->
+encode_properties(Props, #{protocol_version := ?PROTOCOL_V5} = _Opts) ->
+    encode_properties_v5(Props);
+encode_properties(_Properties, _Opts) ->
     [].
 
-encode_properties_v5(undefined, _PacketType, _Opts) ->
+encode_properties_v5(undefined) ->
     [encode_variable_byte_integer(0), <<>>];
-encode_properties_v5(Props, PacketType, Opts) ->
-    encode_properties_v5(maps:to_list(Props), PacketType, Opts, []).
+encode_properties_v5(Props) ->
+    encode_properties_v5(maps:to_list(Props), []).
 
-encode_properties_v5([{PropId, Value} | Rest], PacketType, Opts, Acc) ->
-    encode_properties_v5(Rest, PacketType, Opts,
-                         [encode_property(PropId, Value, PacketType, Opts) | Acc]);
-encode_properties_v5([], _PacketType, _Opts, Acc) ->
+encode_properties_v5([{PropId, Value} | Rest], Acc) ->
+    encode_properties_v5(Rest, [encode_property(PropId, Value) | Acc]);
+encode_properties_v5([], Acc) ->
     [encode_variable_byte_integer(iolist_size(Acc)), Acc].
 
-encode_property(payload_format_indicator, Value, PacketType, _Opts)
-  when PacketType =:= publish; PacketType =:= will_properties ->
+encode_property(payload_format_indicator, Value) ->
     <<16#01, Value:8>>;
 
-encode_property(message_expiry_interval, Value, PacketType, _Opts)
-  when PacketType =:= publish; PacketType =:= will_properties ->
+encode_property(message_expiry_interval, Value) ->
     <<16#02, Value:32>>;
 
-encode_property(content_type, Value, PacketType, _Opts)
-  when PacketType =:= publish; PacketType =:= will_properties ->
+encode_property(content_type, Value) ->
     [<<16#03>>, encode_utf8_string(Value)];
 
-encode_property(response_topic, Value, PacketType, _Opts)
-  when PacketType =:= publish; PacketType =:= will_properties ->
+encode_property(response_topic, Value) ->
     [<<16#08>>, encode_utf8_string(Value)];
 
-encode_property(correlation_data, Value, PacketType, _Opts)
-  when PacketType =:= publish; PacketType =:= will_properties ->
+encode_property(correlation_data, Value) ->
     [<<16#09>>, encode_binary(Value)];
 
 %% For subscribe properties
-encode_property(subscription_identifier, Value, PacketType, _Opts)
-  when PacketType =:= subscribe ->
+encode_property(subscription_identifier, Value) ->
     [<<16#0B>>, encode_variable_byte_integer(Value)];
 
 %% For publish properties
-encode_property(subscription_identifiers, Value, PacketType, _Opts)
-  when PacketType =:= publish ->
+encode_property(subscription_identifiers, Value) ->
     [[<<16#0B>>, encode_variable_byte_integer(SubId)] || SubId <- Value];
 
-encode_property(session_expiry_interval, Value, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack;
-       PacketType =:= disconnect ->
+encode_property(session_expiry_interval, Value) ->
     <<16#11, Value:32>>;
 
-encode_property(assigned_client_identifier, Value, PacketType, _Opts)
-  when PacketType =:= connack ->
+encode_property(assigned_client_identifier, Value) ->
     [<<16#12>>, encode_utf8_string(Value)];
 
-encode_property(server_keep_alive, Value, PacketType, _Opts)
-  when PacketType =:= connack ->
+encode_property(server_keep_alive, Value) ->
     <<16#13, Value:16>>;
 
-encode_property(authentication_method, Value, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack;
-       PacketType =:= auth ->
+encode_property(authentication_method, Value) ->
     [<<16#15>>, encode_utf8_string(Value)];
 
-encode_property(authentication_data, Value, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack;
-       PacketType =:= auth ->
+encode_property(authentication_data, Value) ->
     [<<16#16>>, encode_binary(Value)];
 
-encode_property(request_problem_information, Value, PacketType, _Opts)
-  when PacketType =:= connect ->
+encode_property(request_problem_information, Value) ->
     <<16#17, (encode_bool(Value)):8>>;
 
-encode_property(will_delay_interval, Value, PacketType, _Opts)
-  when PacketType =:= will_properties ->
+encode_property(will_delay_interval, Value) ->
     <<16#18, Value:32>>;
 
-encode_property(request_response_information, Value, PacketType, _Opts)
-  when PacketType =:= connect ->
+encode_property(request_response_information, Value) ->
     <<16#19, (encode_bool(Value)):8>>;
 
-encode_property(response_information, Value, PacketType, _Opts)
-  when PacketType =:= connack ->
+encode_property(response_information, Value) ->
     [<<16#1A>>, encode_utf8_string(Value)];
 
-encode_property(server_reference, Value, PacketType, _Opts)
-  when PacketType =:= connack;
-       PacketType =:= disconnect ->
+encode_property(server_reference, Value) ->
     [<<16#1C>>, encode_utf8_string(Value)];
 
-encode_property(reason_string, Value, PacketType, _Opts)
-  when PacketType =:= connack;
-       PacketType =:= puback;
-       PacketType =:= pubrec;
-       PacketType =:= pubrel;
-       PacketType =:= pubcomp;
-       PacketType =:= suback;
-       PacketType =:= unsuback;
-       PacketType =:= disconnect;
-       PacketType =:= auth ->
+encode_property(reason_string, Value) ->
     [<<16#1F>>, encode_utf8_string(Value)];
-encode_property(receive_maximum, Value, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack ->
+encode_property(receive_maximum, Value) ->
     case Value of
         N when N > 0, N =< 16#FFFF ->
             <<16#21, Value:16>>;
         _ -> error({invalid_property_value, receive_maximum, Value})
     end;
 
-encode_property(topic_alias_maximum, Value, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack ->
+encode_property(topic_alias_maximum, Value) ->
     <<16#22, Value:16>>;
 
-encode_property(topic_alias, Value, PacketType, _Opts) when PacketType =:= publish ->
+encode_property(topic_alias, Value) ->
     case Value of
         0 ->
             error({invalid_property_value, topic_alias, Value});
@@ -395,36 +357,20 @@ encode_property(topic_alias, Value, PacketType, _Opts) when PacketType =:= publi
             <<16#23, Value:16>>
     end;
 
-encode_property(maximum_qos, Value, PacketType, _Opts) when PacketType =:= connack ->
+encode_property(maximum_qos, Value) ->
     case Value of
         N when N =:= 0; N =:= 1; N =:= 2 ->
             <<16#24, N:8>>;
         _ -> error({invalid_property_value, maximum_qos, Value})
     end;
 
-encode_property(retain_available, Value, PacketType, _Opts) when PacketType =:= connack ->
+encode_property(retain_available, Value) ->
     <<16#25, (encode_bool(Value)):8>>;
 
-encode_property(user_property, {Key, Value}, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack;
-       PacketType =:= publish;
-       PacketType =:= will_properties;
-       PacketType =:= puback;
-       PacketType =:= pubrec;
-       PacketType =:= pubrel;
-       PacketType =:= pubcomp;
-       PacketType =:= subscribe;
-       PacketType =:= suback;
-       PacketType =:= unsubscribe;
-       PacketType =:= unsuback;
-       PacketType =:= disconnect;
-       PacketType =:= auth ->
+encode_property(user_property, {Key, Value}) ->
     [<<16#26>>, encode_utf8_string(Key), encode_utf8_string(Value)];
 
-encode_property(maximum_packet_size, Value, PacketType, _Opts)
-  when PacketType =:= connect;
-       PacketType =:= connack ->
+encode_property(maximum_packet_size, Value) ->
     case Value of
         N when N > 0, N =< 16#FFFF_FFFF ->
              <<16#27, Value:32>>;
@@ -432,19 +378,16 @@ encode_property(maximum_packet_size, Value, PacketType, _Opts)
             error({invalid_property_value, maximum_packet_size, Value})
     end;
 
-encode_property(wildcard_subscription_available, Value, PacketType, _Opts)
-  when PacketType =:= connack ->
+encode_property(wildcard_subscription_available, Value) ->
     <<16#28, (encode_bool(Value)):8>>;
 
-encode_property(subscription_identifier_available, Value, PacketType, _Opts)
-  when PacketType =:= connack ->
+encode_property(subscription_identifier_available, Value) ->
     <<16#29, (encode_bool(Value)):8>>;
 
-encode_property(shared_subscription_available, Value, PacketType, _Opts)
-  when PacketType =:= connack ->
+encode_property(shared_subscription_available, Value) ->
     <<16#2A, (encode_bool(Value)):8>>;
 
-encode_property(_, _, _PacketType, _Opts) ->
+encode_property(_, _) ->
     error(unknown_property).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
