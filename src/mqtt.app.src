@@ -1,0 +1,15 @@
+{application, mqtt,
+ [{description, "An OTP library for MQTT codec"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {mod, {mqtt_app, []}},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {licenses, ["Apache-2.0"]},
+  {links, []}
+ ]}.
