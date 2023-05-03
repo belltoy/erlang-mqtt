@@ -311,7 +311,7 @@ handle_publish_request(From, Topic, Message, Opts, #state{socket = Socket} = Sta
     Props = maps:get(properties, Opts, undefined),
     PacketId = case QoS of
                    0 -> undefined;
-                   _ -> State#state.packet_id + 1
+                   _ -> next_packet_id(State)
                end,
     Packet = #mqtt_publish{
         topic = Topic,
@@ -345,7 +345,7 @@ handle_subscribe_request(From, TopicFilter, Opts,
     NoLocal = maps:get(no_local, Opts, false),
     RetainAsPublished = maps:get(retain_as_published, Opts, false),
     RetainHandling = maps:get(retain_handling, Opts, send_at_subscribe),
-    PacketId = State#state.packet_id + 1,
+    PacketId = next_packet_id(State),
     Subscriptions = [
         #mqtt_subscription{
             topic_filter = TopicFilter,
@@ -362,3 +362,9 @@ handle_subscribe_request(From, TopicFilter, Opts,
     ok = gen_tcp:send(Socket, mqtt_codec:encode(Sub, EncodeOpts)),
     Inflight1 = Inflight0#{PacketId => {From, Sub}},
     State#state{packet_id = PacketId, inflight_subscribes = Inflight1}.
+
+next_packet_id(#state{packet_id = PacketId}) ->
+    case PacketId + 1 of
+        N when N > 65535 -> 1;
+        N -> N
+    end.
