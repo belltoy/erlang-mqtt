@@ -24,7 +24,6 @@
 ]).
 
 -export([
-    idle/3,
     connecting/3,
     connected/3
 ]).
@@ -79,40 +78,35 @@ callback_mode() ->
 
 init([Owner, Host, Port, Opts]) ->
     Version = maps:get(protocol_version, Opts, 5),
-    Keepalive = maps:get(keep_alive, Opts, ?DEFAULT_KEEP_ALIVE_SECONDS),
-    {ok, idle, #state{host = Host,
-                      port = Port,
-                      owner = Owner,
-                      monitor = erlang:monitor(process, Owner),
-                      keep_alive = Keepalive,
-                      protocol_version = Version,
-                      encode_opts = #{protocol_version => Version, from => client},
-                      decode_opts = #{protocol_version => Version, from => server}
-                     },
-     [{next_event, internal, connect}]}.
-
-idle(internal, connect, #state{
-    keep_alive = KeepAlive,
-    host = Host, port = Port
-} = State) ->
+    KeepAlive = maps:get(keep_alive, Opts, ?DEFAULT_KEEP_ALIVE_SECONDS),
     case gen_tcp:connect(Host, Port, [binary, {packet, raw}, {active, false}]) of
         {ok, Socket} ->
             {ok, {PeerAddr, PeerPort}} = inet:peername(Socket),
             {ok, {LocalAddr, LocalPort}} = inet:sockname(Socket),
             ?LOG_INFO("Connected to MQTT broker: ~s:~p at ~s:~p",
                       [inet:ntoa(PeerAddr), PeerPort, inet:ntoa(LocalAddr), LocalPort]),
-            Opts = #{from => client, protocol_version => 5},
+            EncodeOpts = #{from => client, protocol_version => 5},
+            DecodeOpts = #{from => server, protocol_version => 5},
             ok = gen_tcp:send(Socket, mqtt_codec:encode(#mqtt_connect{
                                                            protocol_name = ?PROTOCOL_NAME_V5,
                                                            protocol_version = 5,
                                                            clean_session = true,
                                                            keep_alive = KeepAlive,
                                                            client_id = <<"mqtt_client">>
-                                                       }, Opts)),
+                                                       }, EncodeOpts)),
             ok = inet:setopts(Socket, [{active, once}]),
-            {next_state, connecting, State#state{socket = Socket}};
+            {ok, connecting, #state{socket = Socket,
+                                    host = Host,
+                                    port = Port,
+                                    owner = Owner,
+                                    monitor = erlang:monitor(process, Owner),
+                                    keep_alive = KeepAlive,
+                                    protocol_version = Version,
+                                    encode_opts = EncodeOpts,
+                                    decode_opts = DecodeOpts
+                                   }};
         {error, Reason} ->
-            {stop, Reason, State}
+            {stop, Reason}
     end.
 
 connecting(info, {tcp, Socket, Data}, #state{socket = Socket, buffer = Buffer,
@@ -143,6 +137,8 @@ connecting(info, {tcp, Socket, Data}, #state{socket = Socket, buffer = Buffer,
             ok = inet:setopts(Socket, [{active, once}]),
             {keep_state, State#state{buffer = Received}}
     end;
+connecting(cast, close, _State) ->
+    {stop, normal};
 connecting({call, _From}, _Request, State) ->
     {keep_state, State, postpone};
 connecting(info, {'DOWN', _Ref, process, _Pid, _Reason}, _State) ->
